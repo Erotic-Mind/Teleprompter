@@ -107,6 +107,9 @@
   .switch input:checked + .track::before { transform: translateX(19px); }
 
   .pos { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* In a browser (web version) there is no OS screen picker. */
+  html.web-mode #display-list { display: none; }
 </style>
 
 <header>
@@ -172,5 +175,6 @@
   <div class="pos"><span id="pct">0%</span></div>
 </footer>
 
+<script>if(!window.api){document.write('<script src="web-api.js"><\/'+'script>')}</script>
 <script src="segments.js"></script>
 <script src="control.js"></script>

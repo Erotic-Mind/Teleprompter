@@ -222,7 +222,10 @@ window.api.onPresenterStatus((s) => {
 
   if (s.visible) {
     els.stDot.className = 'dot ok';
-    els.stText.textContent = `Prompter live on ${s.label || 'external screen'} (${s.w}×${s.h})`;
+    els.stText.textContent = s.web ? 'Prompter window is open' : `Prompter live on ${s.label || 'external screen'} (${s.w}×${s.h})`;
+  } else if (s.web) {
+    els.stDot.className = 'dot warn';
+    els.stText.textContent = 'Click “Show Prompter” to open the prompter window, then drag it onto your prompter screen';
   } else if (s.hasExternal) {
     els.stDot.className = 'dot warn';
     els.stText.textContent = `${s.label} ready — click Show Prompter`;
