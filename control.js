@@ -7,8 +7,8 @@ const els = {
   editView: $('edit-view'),
   performView: $('perform-view'),
   previewView: $('preview-view'),
-  previewScroll: $('preview-scroll'),
-  previewText: $('preview-text'),
+  previewImg: $('preview-img'),
+  previewEmpty: $('preview-empty'),
   modeSwitch: $('mode-switch'),
   unitSwitch: $('unit-switch'),
   play: $('btn-play'),
@@ -54,7 +54,6 @@ function rebuildSegments() {
   state.segments = window.Segments.splitSegments(state.text, state.unit);
   if (state.currentSeg >= state.segments.length) state.currentSeg = Math.max(0, state.segments.length - 1);
   renderList();
-  els.previewText.textContent = state.text;
   sendScript();
 }
 
@@ -162,6 +161,7 @@ function setMode(mode) {
   els.editView.classList.toggle('on', mode === 'edit');
   els.performView.classList.toggle('on', mode === 'perform');
   els.previewView.classList.toggle('on', mode === 'preview');
+  if (window.api.setPreviewActive) window.api.setPreviewActive(mode === 'preview');
 }
 
 // unit switch (Paragraph / Line)
@@ -239,6 +239,15 @@ window.api.onPresenterStatus((s) => {
 });
 window.api.onDisplaysChanged(loadDisplays);
 
+// Live prompter preview — real screenshots streamed from the presenter.
+if (window.api.onPreviewFrame) {
+  window.api.onPreviewFrame((url) => {
+    els.previewImg.src = url;
+    els.previewImg.style.display = 'block';
+    els.previewEmpty.style.display = 'none';
+  });
+}
+
 // --- messages from the presenter -------------------------------------------
 
 window.api.onFromPresenter((msg) => {
@@ -255,8 +264,6 @@ window.api.onFromPresenter((msg) => {
     }
   } else if (msg.type === 'pos') {
     els.pct.textContent = Math.round(msg.ratio * 100) + '%';
-    const max = els.previewScroll.scrollHeight - els.previewScroll.clientHeight;
-    if (max > 0) els.previewScroll.scrollTop = msg.ratio * max;
     if (msg.atEnd && state.playing) setPlaying(false);
   }
 });

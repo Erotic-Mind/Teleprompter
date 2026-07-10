@@ -76,14 +76,11 @@
   #preview-stage {
     position: relative; flex: 1; background: #000; border: 1px solid var(--line);
     border-radius: 12px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
   }
-  #preview-scroll { position: absolute; inset: 0; overflow: hidden; }
-  #preview-text {
-    color: #fff; font-weight: 600; font-size: 30px; line-height: 1.5; text-align: center;
-    white-space: pre-wrap; word-break: break-word; padding: 44% 8% 70%;
-  }
-  #preview-guide { position: absolute; left: 0; right: 0; top: 42%; height: 2px; background: var(--accent); opacity: 0.5; pointer-events: none; }
-  #preview-badge { position: absolute; left: 12px; top: 10px; font-size: 10.5px; letter-spacing: 2px; color: var(--muted); pointer-events: none; }
+  #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
+  #preview-empty { position: absolute; color: var(--muted); font-size: 14px; text-align: center; padding: 0 12%; line-height: 1.6; }
+  #preview-badge { position: absolute; left: 12px; top: 10px; font-size: 10.5px; letter-spacing: 2px; color: var(--muted); pointer-events: none; z-index: 2; }
 
   footer { border-top: 1px solid var(--line); padding: 12px 18px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .transport { display: flex; gap: 8px; }
@@ -146,9 +143,9 @@
   </section>
   <section id="preview-view">
     <div id="preview-stage">
-      <div id="preview-badge">PROMPTER PREVIEW</div>
-      <div id="preview-scroll"><div id="preview-text"></div></div>
-      <div id="preview-guide"></div>
+      <div id="preview-badge">LIVE PROMPTER VIEW</div>
+      <img id="preview-img" alt="live prompter" />
+      <div id="preview-empty">Open the prompter (click <b>Show Prompter</b>) to see its live screen here — exactly what the talent sees.</div>
     </div>
   </section>
 </main>

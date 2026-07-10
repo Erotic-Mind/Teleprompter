@@ -184,6 +184,11 @@ ipcMain.on('hide-presenter', () => {
   sendStatus();
 });
 
+ipcMain.on('preview-active', (_e, active) => {
+  if (active) startPreviewCapture();
+  else stopPreviewCapture();
+});
+
 ipcMain.handle('extend-displays', async () => {
   if (process.platform !== 'win32') {
     return { ok: false, out: 'On Mac, arrange displays as "Extend" in System Settings (needs the DisplayLink helper app).' };
@@ -219,6 +224,30 @@ function autoExtend() {
     execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1], () => {});
   } catch {
     /* ignore */
+  }
+}
+
+// Live preview: stream real screenshots of the presenter to the control window so
+// the operator sees EXACTLY what's on the prompter, perfectly in sync.
+let captureTimer = null;
+function startPreviewCapture() {
+  if (captureTimer) return;
+  captureTimer = setInterval(async () => {
+    if (!presenterWin || presenterWin.isDestroyed() || !presenterWin.isVisible()) return;
+    if (!controlWin || controlWin.isDestroyed()) return;
+    try {
+      const img = await presenterWin.webContents.capturePage();
+      const small = img.resize({ width: 500 });
+      controlWin.webContents.send('preview-frame', small.toDataURL());
+    } catch {
+      /* ignore */
+    }
+  }, 150);
+}
+function stopPreviewCapture() {
+  if (captureTimer) {
+    clearInterval(captureTimer);
+    captureTimer = null;
   }
 }
 
