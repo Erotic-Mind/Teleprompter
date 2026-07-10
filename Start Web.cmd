@@ -1,5 +1,7 @@
 @echo off
 cd /d "%~dp0"
+echo Setting up the prompter screen...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0extend-displays.ps1"
 echo Starting Prompter (web version)...
 start "Prompter Web Server" cmd /k node serve.js
 timeout /t 2 >nul

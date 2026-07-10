@@ -210,6 +210,18 @@ function notifyDisplaysChanged() {
   sendStatus();
 }
 
+// Windows-only: flip a mirrored/duplicated prompter into its own extended screen.
+function autoExtend() {
+  const ps1 = app.isPackaged
+    ? path.join(process.resourcesPath, 'extend-displays.ps1')
+    : path.join(__dirname, 'extend-displays.ps1');
+  try {
+    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1], () => {});
+  } catch {
+    /* ignore */
+  }
+}
+
 // --- app lifecycle ----------------------------------------------------------
 
 app.whenReady().then(() => {
@@ -224,6 +236,13 @@ app.whenReady().then(() => {
   screen.on('display-metrics-changed', notifyDisplaysChanged);
 
   createControlWindow();
+
+  // On Windows, if the prompter is only mirroring (one screen), extend the desktop
+  // automatically so the text gets its own screen — no button needed. The
+  // display-added event then auto-shows the presenter on it.
+  if (process.platform === 'win32' && screen.getAllDisplays().length === 1) {
+    autoExtend();
+  }
 
   // Auto-open the presenter on a real second screen if one exists.
   if (guessPresenterDisplay()) {
