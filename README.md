@@ -1,35 +1,83 @@
 # Prompter
 
 A calm, distraction-free teleprompter for the **Elgato Prompter** (or any external screen).
-Runs on **Windows and Mac**. No internet, no account — your scripts stay on your machine.
+Runs on **Windows and macOS**. No internet, no account — your scripts stay on your machine.
 
-## The idea
+It's a small **desktop app** (not a website). Your **laptop** is the operator desk — you
+write the script and drive everything from there — while the **prompter screen** shows the
+big scrolling text. Built for **retakes**: jump to any paragraph or line instantly.
 
-- Your **laptop** is the operator desk: write the script, then drive everything.
-- The **prompter screen** shows big scrolling text, **mirrored** for the glass.
-- Built for **retakes**: jump to any paragraph or line instantly, roll, jump back.
+---
 
-## Run it
+## Install & run
 
-**Easiest:** double-click **`Start Prompter.cmd`**. It makes the prompter its own
+You need **[Node.js](https://nodejs.org)** (the LTS version) installed first. Check with
+`node --version` in a terminal.
+
+### 🪟 Windows
+
+**Easiest:** double-click **`Start Prompter.cmd`**. It turns the prompter into its own
 screen and launches the app.
 
-**From a terminal:** `npm install` (first time), then `npm start`.
+**From a terminal (PowerShell):**
+```powershell
+npm install   # first time only
+npm start
+```
+
+### 🍎 macOS  (full setup)
+
+macOS can't drive the Elgato's USB display on its own, so there's a one-time driver step.
+
+**1. Install Node.js** — from [nodejs.org](https://nodejs.org), or with Homebrew:
+```bash
+brew install node
+```
+
+**2. Install the Elgato / DisplayLink driver** so macOS sees the prompter as a screen:
+- Install **[Elgato Camera Hub](https://www.elgato.com/downloads)** (it bundles the DisplayLink driver), **or**
+- Install **DisplayLink Manager** directly from Synaptics.
+- Open the app once and, if macOS asks, grant it **Screen Recording** permission in
+  **System Settings → Privacy & Security → Screen Recording** (DisplayLink needs this to
+  draw to the display). Then restart the app.
+
+**3. Set the prompter as a separate screen:**
+- **System Settings → Displays** → click the prompter → set **"Use as: Extended display"**
+  (not *Mirror*).
+
+**4. Get the app and run it:**
+```bash
+git clone https://github.com/Erotic-Mind/Teleprompter.git
+cd Teleprompter
+npm install
+npm start
+```
+
+**Mac notes:**
+- The app **auto-detects** the prompter screen and shows the text there.
+- The **"Make Separate Screen"** button is hidden on Mac (it's a Windows helper) — you use
+  **System Settings → Displays → Extended** instead (step 3).
+- If macOS pops a security prompt the first time you `npm start`, allow it.
+- Apple Silicon (M1–M4) is fully supported — `npm install` fetches the right build.
+
+---
 
 ## Using it
 
 1. **Edit** tab — paste your script. Leave a **blank line between paragraphs**.
-2. Press **Show Prompter** if it isn't already on the glass.
-   - If the status bar says *"mirroring your laptop"*, click **Make Separate Screen**.
+2. Make sure the status bar (top) is **green** ("Prompter live…"). If not:
+   - **Windows:** click **Make Separate Screen**, then **Show Prompter**.
+   - **Mac:** set the display to *Extended* (above), then **Show Prompter**.
 3. **Perform** tab — your script becomes a list of paragraphs (or lines).
-4. **Play** to roll. The current line **highlights live** here on the laptop, so you
-   never have to look away to know where you are.
+4. **Play** to roll. The current line **highlights live** on the laptop, so you never have
+   to look away to know where you are.
+5. **Preview** tab — a readable live copy of exactly what the prompter is showing.
 
 ### Retakes (the important part)
 
 - **Click any paragraph/line** → the prompter jumps there and waits.
 - **⏮ / ⏭** (or **PageUp / PageDown**) → step back/forward one paragraph or line.
-- Switch **Jump by: Paragraph / Line** depending on how fine you want the steps.
+- Switch **Jump by: Paragraph / Line** for coarse or fine steps.
 - Hit **Play** and you're rolling from that exact spot.
 
 ## Keyboard (while the control window is active)
@@ -43,15 +91,27 @@ screen and launches the app.
 
 ## Controls
 
-- **Speed** — words per minute. **Font** — text size on the prompter.
-- **Mirror** — flips text for the beam-splitter glass (keep **ON** for the Elgato).
+- **Speed** — words per minute (up to 500). **Font** — text size on the prompter.
+- **Mirror** — flips the text left-to-right. **Off by default.** Turn it **ON only if your
+  prompter glass shows the text backwards.**
 - **Screen** picker — choose which display is the prompter.
 - **Show / Hide Prompter** — bring the text screen up or dismiss it.
 
-## Notes
+Every button and slider also shows a plain-English tip when you hover over it.
 
-- The Elgato is a USB display that slips back to *mirroring* your laptop when it
-  sleeps. The launcher and the **Make Separate Screen** button re-extend it in one click.
-- On **Mac** you need Elgato/DisplayLink's helper app so macOS can drive the USB display,
-  then arrange displays as **Extend**.
-- Your script and settings are **saved automatically** and reload next time.
+---
+
+## Troubleshooting
+
+- **"Prompter is mirroring your laptop"** — it's not a separate screen yet.
+  Windows: click **Make Separate Screen**. Mac: set it to *Extended* in System Settings.
+  (The Elgato is a USB display that slips back to mirroring when it sleeps — just redo this.)
+- **Text reads backwards on the glass** — turn **Mirror** ON.
+- **Prompter screen stays black** — click **Show Prompter**, and check the **Screen** picker
+  is pointing at the Elgato.
+- **Scrolling won't start** — make sure you have a script pasted, then press **Play** / Space.
+
+## Good to know
+
+- Everything runs **locally and offline** — no account, no cloud.
+- Your **script and settings are saved automatically** and reload next time you open the app.
