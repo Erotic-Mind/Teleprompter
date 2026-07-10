@@ -229,26 +229,36 @@ function autoExtend() {
 
 // Live preview: stream real screenshots of the presenter to the control window so
 // the operator sees EXACTLY what's on the prompter, perfectly in sync.
-let captureTimer = null;
-function startPreviewCapture() {
-  if (captureTimer) return;
-  captureTimer = setInterval(async () => {
-    if (!presenterWin || presenterWin.isDestroyed() || !presenterWin.isVisible()) return;
-    if (!controlWin || controlWin.isDestroyed()) return;
+let capturing = false;
+async function captureLoop() {
+  if (!capturing) return;
+  const start = Date.now();
+  if (
+    presenterWin && !presenterWin.isDestroyed() && presenterWin.isVisible() &&
+    controlWin && !controlWin.isDestroyed()
+  ) {
     try {
       const img = await presenterWin.webContents.capturePage();
-      const small = img.resize({ width: 500 });
-      controlWin.webContents.send('preview-frame', small.toDataURL());
+      const small = img.resize({ width: 480 });
+      // JPEG is far lighter than PNG to encode + transfer, so we can stream faster.
+      const url = 'data:image/jpeg;base64,' + small.toJPEG(70).toString('base64');
+      controlWin.webContents.send('preview-frame', url);
     } catch {
       /* ignore */
     }
-  }, 150);
+  }
+  if (capturing) {
+    // self-pace to ~25fps; never let captures overlap or pile up
+    setTimeout(captureLoop, Math.max(0, 40 - (Date.now() - start)));
+  }
+}
+function startPreviewCapture() {
+  if (capturing) return;
+  capturing = true;
+  captureLoop();
 }
 function stopPreviewCapture() {
-  if (captureTimer) {
-    clearInterval(captureTimer);
-    captureTimer = null;
-  }
+  capturing = false;
 }
 
 // --- app lifecycle ----------------------------------------------------------
