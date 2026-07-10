@@ -1,0 +1,176 @@
+<meta charset="utf-8" />
+<title>Prompter — Control</title>
+<style>
+  :root {
+    --bg: #0c0c0e;
+    --panel: #141417;
+    --panel-2: #1b1b1f;
+    --line: #26262b;
+    --ink: #ececee;
+    --muted: #8a8a92;
+    --accent: #ff5a4d;
+    --ok: #6ad08a;
+    --amber: #e5b567;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand h1 { font-size: 14px; letter-spacing: 3px; font-weight: 600; }
+  .status-pill { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); flex: 1; }
+  .status-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .status-pill .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .status-pill .dot.warn { background: var(--amber); }
+  .head-actions { display: flex; align-items: center; gap: 8px; }
+
+  select {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: inherit; max-width: 190px;
+  }
+  button {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 13px; font-size: 13px; font-family: inherit;
+    cursor: pointer; transition: background .12s, border-color .12s, opacity .12s; white-space: nowrap;
+  }
+  button:hover { background: #232329; border-color: #34343c; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.accent { background: var(--accent); border-color: var(--accent); color: #180a08; font-weight: 600; }
+
+  .modebar { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; border-bottom: 1px solid var(--line); }
+  .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .segmented button { border: none; border-radius: 0; background: transparent; padding: 8px 16px; color: var(--muted); }
+  .segmented button.on { background: var(--panel-2); color: var(--ink); }
+  .modebar .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-right: 8px; }
+
+  main { flex: 1; min-height: 0; display: flex; }
+  #edit-view, #perform-view, #preview-view { flex: 1; min-height: 0; padding: 14px 18px; display: none; }
+  #edit-view.on, #perform-view.on { display: flex; flex-direction: column; }
+  #preview-view.on { display: flex; }
+  textarea {
+    flex: 1; resize: none; width: 100%; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px; padding: 16px; font-size: 17px; line-height: 1.6;
+    font-family: inherit; outline: none;
+  }
+  textarea:focus { border-color: #3a3a42; }
+
+  #seg-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 6px; }
+  .seg-row {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid transparent;
+    border-radius: 9px; padding: 12px 15px; font-size: 16px; line-height: 1.5; color: #c3c3c9;
+    cursor: pointer; transition: background .1s, border-color .1s, color .1s;
+  }
+  .seg-row:hover { background: var(--panel-2); }
+  .seg-row.current { border-left-color: var(--accent); background: #201a19; color: var(--ink); }
+  .seg-row .num { color: var(--muted); font-size: 11px; letter-spacing: 1px; margin-right: 8px; }
+  .empty-note { color: var(--muted); font-size: 14px; text-align: center; margin-top: 40px; line-height: 1.6; }
+
+  /* Preview = a small live copy of what the prompter is showing (readable, not flipped) */
+  #preview-view { padding: 14px 18px; }
+  #preview-stage {
+    position: relative; flex: 1; background: #000; border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden;
+  }
+  #preview-scroll { position: absolute; inset: 0; overflow: hidden; }
+  #preview-text {
+    color: #fff; font-weight: 600; font-size: 30px; line-height: 1.5; text-align: center;
+    white-space: pre-wrap; word-break: break-word; padding: 44% 8% 70%;
+  }
+  #preview-guide { position: absolute; left: 0; right: 0; top: 42%; height: 2px; background: var(--accent); opacity: 0.5; pointer-events: none; }
+  #preview-badge { position: absolute; left: 12px; top: 10px; font-size: 10.5px; letter-spacing: 2px; color: var(--muted); pointer-events: none; }
+
+  footer { border-top: 1px solid var(--line); padding: 12px 18px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .transport { display: flex; gap: 8px; }
+  .transport button { min-width: 46px; }
+  #btn-play { min-width: 108px; font-weight: 600; }
+  #btn-play.playing { background: var(--accent); border-color: var(--accent); color: #180a08; }
+
+  .ctrl { display: flex; flex-direction: column; gap: 5px; min-width: 160px; }
+  .ctrl .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .ctrl .row .name { font-size: 10.5px; letter-spacing: 2px; color: var(--muted); }
+  .ctrl .row .val { font-size: 13px; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  .toggle { display: flex; align-items: center; gap: 10px; }
+  .toggle span { font-size: 12.5px; color: var(--muted); }
+  .switch { position: relative; width: 42px; height: 23px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .track { position: absolute; inset: 0; background: #35353c; border-radius: 999px; transition: background .15s; }
+  .track::before { content: ""; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px; background: #eee; border-radius: 50%; transition: transform .15s; }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::before { transform: translateX(19px); }
+
+  .pos { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style>
+
+<header>
+  <div class="brand"><span id="live-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted)"></span><h1>PROMPTER</h1></div>
+  <div class="status-pill"><span class="dot" id="st-dot"></span><span id="st-text">Checking screens…</span></div>
+  <div class="head-actions">
+    <select id="display-list" title="Which screen shows the prompter text"></select>
+    <button id="btn-extend" title="Turn the prompter into its own separate screen, so it shows the script instead of copying your laptop">Make Separate Screen</button>
+    <button id="btn-show" class="accent" title="Show or hide the big scrolling text on the prompter screen">Show Prompter</button>
+  </div>
+</header>
+
+<div class="modebar">
+  <div class="segmented" id="mode-switch">
+    <button data-mode="edit" class="on" title="Write or paste your script">✏️ Edit</button>
+    <button data-mode="perform" title="Run the script — click any line to jump there for retakes">▶ Perform</button>
+    <button data-mode="preview" title="See what the prompter is showing, right here on your laptop">👁 Preview</button>
+  </div>
+  <div style="display:flex;align-items:center">
+    <span class="lbl">JUMP BY</span>
+    <div class="segmented" id="unit-switch">
+      <button data-unit="paragraph" class="on" title="Jump a whole paragraph at a time">Paragraph</button>
+      <button data-unit="line" title="Jump one line at a time">Line</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section id="edit-view" class="on">
+    <textarea id="script" placeholder="Paste or type your script here…&#10;&#10;Leave a blank line between paragraphs so you can jump paragraph-by-paragraph for retakes."></textarea>
+  </section>
+  <section id="perform-view">
+    <div id="seg-list"></div>
+  </section>
+  <section id="preview-view">
+    <div id="preview-stage">
+      <div id="preview-badge">PROMPTER PREVIEW</div>
+      <div id="preview-scroll"><div id="preview-text"></div></div>
+      <div id="preview-guide"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="transport">
+    <button id="btn-prev" title="Previous paragraph or line (PageUp)">⏮</button>
+    <button id="btn-play" title="Start or pause scrolling (Space)">▶ Play</button>
+    <button id="btn-next" title="Next paragraph or line (PageDown)">⏭</button>
+    <button id="btn-reset" title="Jump back to the top (Home)">Reset</button>
+  </div>
+  <div class="ctrl">
+    <div class="row"><span class="name">SPEED</span><span class="val"><span id="wpm-val">130</span> wpm</span></div>
+    <input type="range" id="wpm" min="40" max="500" step="5" value="130" title="How fast the text scrolls (words per minute). Up to 500." />
+  </div>
+  <div class="ctrl">
+    <div class="row"><span class="name">FONT</span><span class="val"><span id="font-val">72</span> px</span></div>
+    <input type="range" id="font" min="32" max="200" step="2" value="72" title="Text size on the prompter" />
+  </div>
+  <div class="toggle" title="Flip the text left-to-right. Turn this ON only if your prompter glass shows the text backwards.">
+    <span>Mirror</span>
+    <label class="switch"><input type="checkbox" id="mirror" /><span class="track"></span></label>
+  </div>
+  <div class="pos"><span id="pct">0%</span></div>
+</footer>
+
+<script src="segments.js"></script>
+<script src="control.js"></script>

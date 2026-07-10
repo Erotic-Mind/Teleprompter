@@ -1,0 +1,14 @@
+{
+  "name": "imadjinn-prompter",
+  "version": "0.1.0",
+  "description": "A calm, distraction-free teleprompter for the Elgato Prompter (and any external screen). Windows + Mac.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Imadjinn",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^34.0.0"
+  }
+}
