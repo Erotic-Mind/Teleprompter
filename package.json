@@ -1,14 +1,48 @@
 {
-  "name": "imadjinn-prompter",
+  "name": "prompter",
   "version": "0.1.0",
   "description": "A calm, distraction-free teleprompter for the Elgato Prompter (and any external screen). Windows + Mac.",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
   },
-  "author": "Imadjinn",
+  "author": "Sagar Honnalli",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^34.0.0"
+    "electron": "^34.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.sagarhonnalli.prompter",
+    "productName": "Prompter",
+    "files": [
+      "**/*",
+      "!dist${/*}",
+      "!**/*.md"
+    ],
+    "extraResources": [
+      "extend-displays.ps1"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Prompter"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    }
   }
 }

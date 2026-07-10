@@ -188,7 +188,11 @@ ipcMain.handle('extend-displays', async () => {
   if (process.platform !== 'win32') {
     return { ok: false, out: 'On Mac, arrange displays as "Extend" in System Settings (needs the DisplayLink helper app).' };
   }
-  const ps1 = path.join(__dirname, 'extend-displays.ps1');
+  // In a packaged build the .ps1 is shipped as an unpacked extra resource,
+  // because PowerShell can't read it from inside the app.asar archive.
+  const ps1 = app.isPackaged
+    ? path.join(process.resourcesPath, 'extend-displays.ps1')
+    : path.join(__dirname, 'extend-displays.ps1');
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
