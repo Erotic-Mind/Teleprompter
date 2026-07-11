@@ -21,4 +21,8 @@ contextBridge.exposeInMainWorld('api', {
   // persistence
   loadState: () => ipcRenderer.invoke('load-state'),
   saveState: (partial) => ipcRenderer.send('save-state', partial),
+
+  // phone remote
+  getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),
+  onRemoteCommand: (cb) => ipcRenderer.on('remote-command', (_e, c) => cb(c)),
 });

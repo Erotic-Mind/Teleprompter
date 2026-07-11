@@ -1,10 +1,11 @@
 {
   "name": "prompter",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "A calm, distraction-free teleprompter for the Elgato Prompter (and any external screen). Windows + Mac.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "electron test-suite.js",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac"
@@ -24,7 +25,8 @@
       "!**/*.md"
     ],
     "extraResources": [
-      "extend-displays.ps1"
+      "extend-displays.ps1",
+      "remote.html"
     ],
     "win": {
       "target": [

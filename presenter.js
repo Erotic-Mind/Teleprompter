@@ -1,192 +1,221 @@
-// Presenter: big scrolling text on the prompter screen.
-// Smooth sub-pixel scroll via CSS transform, mirrored for the beam-splitter glass,
-// with paragraph/line segments so the control window can jump to any point.
+// Presenter — native-scroll teleprompter (cueprompter method: paced whole-pixel
+// native scroll, which a USB/DisplayLink display renders smoothly). Also supports
+// [PAUSE]/[TAKE] markers and per-word spans for voice word-following.
 
-const scroller = document.getElementById('scroller');
+const viewport = document.getElementById('viewport');
+const content = document.getElementById('content');
 const script = document.getElementById('script');
 const hint = document.getElementById('hint');
 
+let items = [];
 let segEls = [];
-let offset = 0; // pixels scrolled
+let wordEls = [];
+let pauseEls = [];
+let offset = 0; // desired scrollTop (whole px)
 let playing = false;
-let mirror = false; // control window pushes the real value; off by default
+let mirror = false;
 let wpm = 130;
 let pxPerSec = 0;
+let stepPx = 1;
+let stepMs = 20;
 let maxOffset = 0;
-let last = null;
-let posThrottle = 0;
-let currentSeg = -1;
+let timer = null;
 let previewActive = false;
+let currentSeg = -1;
+let lastReport = 0;
 
-const readingLinePx = () => window.innerHeight * 0.42;
+// voice word-following
+let voiceMode = false;
+let voiceTarget = null;
+let voiceRAF = null;
 
-function countWords(text) {
-  const t = (text || '').trim();
-  return t ? t.split(/\s+/).length : 0;
+let readPos = 45; // reading-line position, % from top (adjustable)
+const padTop = document.querySelector('.pad-top');
+const guideEl = document.getElementById('guide');
+const readingLineY = () => window.innerHeight * (readPos / 100);
+function setReadPos(pct) {
+  readPos = Math.max(15, Math.min(75, pct));
+  if (padTop) padTop.style.height = readPos + 'vh';
+  if (guideEl) guideEl.style.top = readPos + '%';
+  recompute();
 }
+const nowMs = () => (window.performance ? performance.now() : 0);
 
-function buildSegments(segments) {
-  script.innerHTML = '';
-  segEls = [];
-  segments.forEach((seg) => {
-    const div = document.createElement('div');
-    div.className = 'seg';
-    div.dataset.i = seg.index;
-    div.textContent = seg.text;
-    script.appendChild(div);
-    segEls.push(div);
-  });
-  hint.style.display = segments.length ? 'none' : 'block';
+function countWords(t) { t = (t || '').trim(); return t ? t.split(/\s+/).length : 0; }
+
+// Turn words-per-minute into a paced whole-pixel step (small step, even timing).
+function computePacing() {
+  if (pxPerSec <= 0) { stepPx = 1; stepMs = 1000; return; }
+  let px = 1, ms = 1000 / pxPerSec;
+  while (ms < 8 && px < 4) { px++; ms = (px * 1000) / pxPerSec; }
+  stepPx = px;
+  stepMs = Math.max(4, ms);
 }
 
 function recompute() {
-  const scriptHeight = script.offsetHeight || 1;
+  const scriptH = script.offsetHeight || 1;
   const n = countWords(script.textContent) || 1;
-  pxPerSec = (scriptHeight / n) * (wpm / 60);
-  maxOffset = Math.max(0, scroller.offsetHeight - window.innerHeight);
+  pxPerSec = (scriptH / n) * (wpm / 60);
+  computePacing();
+  maxOffset = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
   clamp();
-  applyTransform();
+  apply();
+}
+function clamp() { if (offset < 0) offset = 0; if (offset > maxOffset) offset = maxOffset; }
+function apply() { viewport.scrollTop = Math.round(offset); }         // native scroll
+function applyMirror() { content.style.transform = `scaleX(${mirror ? -1 : 1})`; }
+
+function build(list) {
+  items = list || [];
+  script.innerHTML = '';
+  segEls = []; wordEls = []; pauseEls = [];
+  items.forEach((it) => {
+    if (it.kind === 'seg') {
+      const div = document.createElement('div');
+      div.className = 'seg';
+      div.dataset.i = it.index;
+      it.text.split(/(\s+)/).forEach((p) => {
+        if (p === '') return;
+        if (/^\s+$/.test(p)) { div.appendChild(document.createTextNode(p)); return; }
+        const s = document.createElement('span');
+        s.className = 'w';
+        s.textContent = p;
+        s.dataset.w = wordEls.length;
+        div.appendChild(s);
+        wordEls.push(s);
+      });
+      script.appendChild(div);
+      segEls.push(div);
+    } else if (it.kind === 'marker') {
+      const div = document.createElement('div');
+      div.className = 'marker';
+      div.dataset.marker = it.type;
+      div.textContent = '— ' + it.label + ' —';
+      script.appendChild(div);
+      if (it.type === 'pause') pauseEls.push(div);
+    }
+  });
+  hint.style.display = items.length ? 'none' : 'flex';
+  applyMirror();
+  requestAnimationFrame(() => { recompute(); currentSeg = -1; highlightCurrent(); });
 }
 
-function clamp() {
-  if (offset < 0) offset = 0;
-  if (offset > maxOffset) offset = maxOffset;
+function computeCurrentSeg() {
+  const line = offset + readingLineY();
+  let idx = -1;
+  for (let i = 0; i < segEls.length; i++) { if (segEls[i].offsetTop <= line) idx = i; else break; }
+  return idx;
+}
+function highlightCurrent() {
+  const idx = computeCurrentSeg();
+  if (idx !== currentSeg) { currentSeg = idx; window.api.toControl({ type: 'seg', index: idx }); }
 }
 
-function applyTransform() {
-  // Render on whole pixels: cleaner frame-to-frame diffs, which a USB (DisplayLink)
-  // display compresses far more smoothly than sub-pixel anti-aliased motion.
-  const y = Math.round(offset);
-  scroller.style.transform = `translateY(${-y}px) scaleX(${mirror ? -1 : 1})`;
-}
-
-// Which segment is currently sitting on the reading line?
-function computeCurrent() {
-  const line = offset + readingLinePx();
-  let idx = 0;
-  for (let i = 0; i < segEls.length; i++) {
-    if (segEls[i].offsetTop <= line) idx = i;
-    else break;
-  }
-  return segEls.length ? idx : -1;
-}
-
-function highlightCurrent(idx) {
-  if (idx === currentSeg) return;
-  if (segEls[currentSeg]) segEls[currentSeg].classList.remove('current');
-  if (segEls[idx]) segEls[idx].classList.add('current');
-  currentSeg = idx;
-  window.api.toControl({ type: 'seg', index: idx });
-}
+function targetForEl(el) { return Math.max(0, Math.min(maxOffset, el.offsetTop - readingLineY())); }
 
 function seekToSegment(index) {
   const el = segEls[index];
   if (!el) return;
-  requestAnimationFrame(() => {
-    offset = el.offsetTop - readingLinePx();
-    clamp();
-    applyTransform();
-    highlightCurrent(computeCurrent());
-    reportPos();
-  });
+  requestAnimationFrame(() => { offset = targetForEl(el); apply(); highlightCurrent(); reportPos(); });
 }
 
 function reportPos() {
   const ratio = maxOffset > 0 ? offset / maxOffset : 0;
-  window.api.toControl({ type: 'pos', ratio, playing, atEnd: offset >= maxOffset });
+  window.api.toControl({ type: 'pos', ratio, offset, playing, atEnd: offset >= maxOffset });
 }
+function reportDims() { window.api.toControl({ type: 'dims', w: window.innerWidth, h: window.innerHeight }); }
 
-// Tell the control window our viewport size so the preview clone can match layout.
-function reportDims() {
-  window.api.toControl({ type: 'dims', w: window.innerWidth, h: window.innerHeight });
-}
-
-function frame(t) {
-  if (last == null) last = t;
-  let dt = (t - last) / 1000;
-  last = t;
-  // Clamp the time step: if the system hiccups and a frame arrives late, advance
-  // only a little instead of lurching forward. A stall becomes a gentle slow-down,
-  // not a jarring jump — the single biggest thing that reads as "choppy".
-  if (dt > 0.05) dt = 0.05;
-
-  if (playing && pxPerSec > 0) {
-    offset += pxPerSec * dt;
-    if (offset >= maxOffset) {
-      offset = maxOffset;
-      playing = false;
-    }
-    applyTransform();
-  }
-
-  if (++posThrottle % 4 === 0) {
-    highlightCurrent(computeCurrent());
+function maybeReport() {
+  const t = nowMs();
+  if (t - lastReport >= 33) {
+    lastReport = t;
+    highlightCurrent();
     reportPos();
+    if (previewActive) window.api.toControl({ type: 'offset', offset });
   }
-  // Feed the live preview clone every frame (60fps) — just a number, cheap, no capture.
-  if (previewActive) window.api.toControl({ type: 'offset', offset });
-  requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
 
-window.addEventListener('resize', () => {
-  recompute();
-  reportDims();
-});
+// --- paced native-scroll clock ---------------------------------------------
+function tick() {
+  if (!playing) return;
+  const prev = offset;
+  offset += stepPx;
+  for (const m of pauseEls) {
+    const t = targetForEl(m);
+    if (t > prev && t <= offset) {
+      offset = t; apply(); setPlaying(false); reportPos();
+      window.api.toControl({ type: 'marker', markerType: 'pause' });
+      return;
+    }
+  }
+  if (offset >= maxOffset) { offset = maxOffset; apply(); setPlaying(false); reportPos(); return; }
+  apply();
+  maybeReport();
+  timer = setTimeout(tick, stepMs);
+}
+function setPlaying(on) {
+  playing = !!on && !voiceMode;
+  clearTimeout(timer);
+  if (playing) {
+    if (offset >= maxOffset) offset = 0;
+    timer = setTimeout(tick, stepMs);
+  }
+  reportPos();
+}
 
-// --- commands from the control window --------------------------------------
+// --- voice word-following (Phase 5) ----------------------------------------
+function voiceFollow() {
+  if (!voiceMode || voiceTarget == null) { voiceRAF = null; return; }
+  const diff = voiceTarget - offset;
+  if (Math.abs(diff) < 1) offset = voiceTarget;
+  else offset += Math.sign(diff) * Math.max(1, Math.abs(diff) * 0.15);
+  offset = Math.round(offset); clamp(); apply(); maybeReport();
+  voiceRAF = requestAnimationFrame(voiceFollow);
+}
+function setVoiceWord(index) {
+  const el = wordEls[index];
+  if (!el) return;
+  voiceTarget = targetForEl(el);
+  for (let i = 0; i < wordEls.length; i++) wordEls[i].classList.toggle('spoken', i < index);
+  if (!voiceRAF) voiceRAF = requestAnimationFrame(voiceFollow);
+}
 
+window.addEventListener('resize', () => { recompute(); reportDims(); });
+
+// --- commands from control -------------------------------------------------
 window.api.onFromControl((msg) => {
   switch (msg.type) {
     case 'script':
-      buildSegments(msg.segments || []);
-      requestAnimationFrame(() => {
-        recompute();
-        currentSeg = -1;
-        highlightCurrent(computeCurrent());
-      });
+      build(msg.items || (msg.segments || []).map((s) => ({ kind: 'seg', index: s.index, text: s.text })));
       break;
     case 'font':
       script.style.fontSize = msg.value + 'px';
       requestAnimationFrame(recompute);
       break;
     case 'speed':
-      wpm = msg.value;
-      recompute();
+      wpm = msg.value; recompute();
+      if (playing) { clearTimeout(timer); timer = setTimeout(tick, stepMs); }
       break;
-    case 'mirror':
-      mirror = !!msg.value;
-      applyTransform();
-      break;
-    case 'seekSeg':
-      seekToSegment(msg.index);
-      break;
-    case 'play':
-      if (offset >= maxOffset) offset = 0;
-      playing = true;
-      break;
-    case 'pause':
-      playing = false;
-      break;
+    case 'mirror': mirror = !!msg.value; applyMirror(); break;
+    case 'lineHeight': script.style.lineHeight = msg.value; requestAnimationFrame(recompute); break;
+    case 'width': script.style.maxWidth = msg.value + '%'; requestAnimationFrame(recompute); break;
+    case 'readPos': setReadPos(msg.value); break;
+    case 'seekSeg': seekToSegment(msg.index); break;
+    case 'play': setPlaying(true); break;
+    case 'pause': setPlaying(false); break;
     case 'reset':
-      offset = 0;
-      playing = false;
-      applyTransform();
-      highlightCurrent(computeCurrent());
-      reportPos();
+      setPlaying(false); offset = 0; apply(); highlightCurrent(); reportPos();
+      for (const w of wordEls) w.classList.remove('spoken');
       break;
-    case 'nudge':
-      offset += msg.value;
-      clamp();
-      applyTransform();
-      reportPos();
+    case 'nudge': offset += msg.value; clamp(); apply(); highlightCurrent(); reportPos(); break;
+    case 'previewActive': previewActive = !!msg.value; if (previewActive) reportDims(); break;
+    case 'voiceMode':
+      voiceMode = !!msg.value;
+      if (voiceMode) setPlaying(false);
+      else { voiceTarget = null; for (const w of wordEls) w.classList.remove('spoken'); }
       break;
-    case 'previewActive':
-      previewActive = !!msg.value;
-      if (previewActive) reportDims();
-      break;
+    case 'voiceWord': if (voiceMode) setVoiceWord(msg.index); break;
   }
 });
 
-// Ready for the control window to push the current script + settings.
 window.api.toControl({ type: 'ready' });

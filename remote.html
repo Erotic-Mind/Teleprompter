@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Prompter Remote</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #0c0c0e; color: #ececee; font-family: system-ui, -apple-system, Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; padding: 16px; gap: 12px; user-select: none; }
+  h1 { font-size: 14px; letter-spacing: 3px; text-align: center; color: #8a8a92; font-weight: 600; margin: 6px 0; }
+  button { border: none; border-radius: 16px; background: #1b1b1f; color: #ececee; font-size: 19px; font-family: inherit; padding: 22px; cursor: pointer; }
+  button:active { background: #2a2a30; transform: scale(0.98); }
+  .play { background: #ff5a4d; color: #180a08; font-weight: 700; font-size: 26px; padding: 34px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+  .wide { grid-column: 1 / -1; }
+  .foot { text-align: center; color: #55555c; font-size: 12px; padding-bottom: 4px; }
+</style>
+</head>
+<body>
+  <h1>PROMPTER REMOTE</h1>
+  <button class="play" id="play">▶ / ❚❚&nbsp;&nbsp;Play · Pause</button>
+  <div class="grid">
+    <button data-cmd="prev">⏮ Prev</button>
+    <button data-cmd="next">Next ⏭</button>
+    <button data-cmd="speed" data-delta="-10">🐢 Slower</button>
+    <button data-cmd="speed" data-delta="10">Faster 🐇</button>
+    <button class="wide" data-cmd="reset">↺ Reset to top</button>
+  </div>
+  <div class="foot" id="foot">Connected — control your prompter from here</div>
+<script>
+  function cmd(type, delta) {
+    fetch('/cmd?type=' + type + (delta ? '&delta=' + delta : ''))
+      .then(function () { document.getElementById('foot').textContent = '✓ ' + type; })
+      .catch(function () { document.getElementById('foot').textContent = '⚠ lost connection to laptop'; });
+  }
+  document.getElementById('play').addEventListener('click', function () { cmd('toggle'); });
+  document.querySelectorAll('[data-cmd]').forEach(function (b) {
+    b.addEventListener('click', function () { cmd(b.dataset.cmd, b.dataset.delta ? parseInt(b.dataset.delta) : 0); });
+  });
+</script>
+</body>
+</html>

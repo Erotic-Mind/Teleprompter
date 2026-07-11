@@ -11,6 +11,8 @@ const { app, BrowserWindow, ipcMain, screen, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
+const http = require('http');
+const os = require('os');
 
 let controlWin = null;
 let presenterWin = null;
@@ -246,6 +248,48 @@ function tryExtend(maxAttempts, done) {
 // (Live preview is now a lightweight DOM clone driven by an offset number the
 //  presenter broadcasts — no screenshotting, so the prompter never stutters.)
 
+// --- phone remote (tiny HTTP server on your Wi-Fi) --------------------------
+let remoteServer = null;
+const REMOTE_PORT = 5178;
+
+function lanIP() {
+  const ifs = os.networkInterfaces();
+  for (const name of Object.keys(ifs)) {
+    for (const i of ifs[name] || []) {
+      if (i.family === 'IPv4' && !i.internal) return i.address;
+    }
+  }
+  return '127.0.0.1';
+}
+function remoteHtmlPath() {
+  return app.isPackaged ? path.join(process.resourcesPath, 'remote.html') : path.join(__dirname, 'remote.html');
+}
+function startRemoteServer() {
+  if (remoteServer) return;
+  remoteServer = http.createServer((req, res) => {
+    const parts = (req.url || '/').split('?');
+    if (parts[0] === '/cmd') {
+      const params = new URLSearchParams(parts[1] || '');
+      const cmd = { type: params.get('type'), delta: parseInt(params.get('delta') || '0', 10) };
+      if (controlWin && !controlWin.isDestroyed()) controlWin.webContents.send('remote-command', cmd);
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('ok');
+      return;
+    }
+    try {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(fs.readFileSync(remoteHtmlPath()));
+    } catch {
+      res.writeHead(404);
+      res.end('not found');
+    }
+  });
+  remoteServer.on('error', () => { remoteServer = null; });
+  remoteServer.listen(REMOTE_PORT, '0.0.0.0');
+}
+
+ipcMain.handle('get-remote-info', () => ({ url: remoteServer ? `http://${lanIP()}:${REMOTE_PORT}` : null }));
+
 // --- app lifecycle ----------------------------------------------------------
 
 app.whenReady().then(() => {
@@ -260,6 +304,7 @@ app.whenReady().then(() => {
   screen.on('display-metrics-changed', notifyDisplaysChanged);
 
   createControlWindow();
+  startRemoteServer();
 
   // On Windows, if the prompter is only mirroring (one screen), extend the desktop
   // automatically so the text gets its own screen — no button needed. The
