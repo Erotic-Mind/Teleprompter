@@ -54,7 +54,10 @@ function clamp() {
 }
 
 function applyTransform() {
-  scroller.style.transform = `translateY(${-offset}px) scaleX(${mirror ? -1 : 1})`;
+  // Render on whole pixels: cleaner frame-to-frame diffs, which a USB (DisplayLink)
+  // display compresses far more smoothly than sub-pixel anti-aliased motion.
+  const y = Math.round(offset);
+  scroller.style.transform = `translateY(${-y}px) scaleX(${mirror ? -1 : 1})`;
 }
 
 // Which segment is currently sitting on the reading line?
@@ -100,8 +103,12 @@ function reportDims() {
 
 function frame(t) {
   if (last == null) last = t;
-  const dt = (t - last) / 1000;
+  let dt = (t - last) / 1000;
   last = t;
+  // Clamp the time step: if the system hiccups and a frame arrives late, advance
+  // only a little instead of lurching forward. A stall becomes a gentle slow-down,
+  // not a jarring jump — the single biggest thing that reads as "choppy".
+  if (dt > 0.05) dt = 0.05;
 
   if (playing && pxPerSec > 0) {
     offset += pxPerSec * dt;
@@ -116,8 +123,8 @@ function frame(t) {
     highlightCurrent(computeCurrent());
     reportPos();
   }
-  // Feed the live preview clone every frame (just a number — cheap, no capture).
-  if (previewActive) window.api.toControl({ type: 'offset', offset });
+  // Feed the live preview clone ~30x/sec (just a number — cheap, no capture).
+  if (previewActive && posThrottle % 2 === 0) window.api.toControl({ type: 'offset', offset });
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

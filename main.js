@@ -189,16 +189,9 @@ ipcMain.handle('extend-displays', async () => {
   if (process.platform !== 'win32') {
     return { ok: false, out: 'On Mac, arrange displays as "Extend" in System Settings (needs the DisplayLink helper app).' };
   }
-  // In a packaged build the .ps1 is shipped as an unpacked extra resource,
-  // because PowerShell can't read it from inside the app.asar archive.
-  const ps1 = app.isPackaged
-    ? path.join(process.resourcesPath, 'extend-displays.ps1')
-    : path.join(__dirname, 'extend-displays.ps1');
   return new Promise((resolve) => {
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1],
-      (err, stdout, stderr) => resolve({ ok: !err, out: `${stdout || ''}${stderr || ''}`.trim() })
+    tryExtend(5, (ok) =>
+      resolve({ ok, out: ok ? 'Extended.' : 'Could not extend after several tries — press Win+P → Extend, or replug the prompter.' })
     );
   });
 });
@@ -211,16 +204,43 @@ function notifyDisplaysChanged() {
   sendStatus();
 }
 
-// Windows-only: flip a mirrored/duplicated prompter into its own extended screen.
-function autoExtend() {
-  const ps1 = app.isPackaged
+// Path to the extend helper — resolves correctly whether run from source or packaged.
+function extendPs1Path() {
+  return app.isPackaged
     ? path.join(process.resourcesPath, 'extend-displays.ps1')
     : path.join(__dirname, 'extend-displays.ps1');
+}
+
+function runExtendOnce(cb) {
   try {
-    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1], () => {});
+    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', extendPs1Path()], () => cb && cb());
   } catch {
-    /* ignore */
+    if (cb) cb();
   }
+}
+
+// Windows-only: keep trying to extend until the prompter is actually its own
+// screen (the extend call sometimes reports success but no-ops on this hardware),
+// then stop. Never leaves it sitting in Duplicate.
+function tryExtend(maxAttempts, done) {
+  if (process.platform !== 'win32') {
+    if (done) done(false);
+    return;
+  }
+  let attempt = 0;
+  const step = () => {
+    if (screen.getAllDisplays().length > 1) {
+      if (done) done(true);
+      return;
+    }
+    if (attempt >= maxAttempts) {
+      if (done) done(false);
+      return;
+    }
+    attempt++;
+    runExtendOnce(() => setTimeout(step, 2500));
+  };
+  step();
 }
 
 // (Live preview is now a lightweight DOM clone driven by an offset number the
@@ -245,7 +265,7 @@ app.whenReady().then(() => {
   // automatically so the text gets its own screen — no button needed. The
   // display-added event then auto-shows the presenter on it.
   if (process.platform === 'win32' && screen.getAllDisplays().length === 1) {
-    autoExtend();
+    tryExtend(5);
   }
 
   // Auto-open the presenter on a real second screen if one exists.
