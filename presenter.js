@@ -123,8 +123,8 @@ function frame(t) {
     highlightCurrent(computeCurrent());
     reportPos();
   }
-  // Feed the live preview clone ~30x/sec (just a number — cheap, no capture).
-  if (previewActive && posThrottle % 2 === 0) window.api.toControl({ type: 'offset', offset });
+  // Feed the live preview clone every frame (60fps) — just a number, cheap, no capture.
+  if (previewActive) window.api.toControl({ type: 'offset', offset });
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
