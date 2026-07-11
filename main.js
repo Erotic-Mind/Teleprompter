@@ -184,10 +184,6 @@ ipcMain.on('hide-presenter', () => {
   sendStatus();
 });
 
-ipcMain.on('preview-active', (_e, active) => {
-  if (active) startPreviewCapture();
-  else stopPreviewCapture();
-});
 
 ipcMain.handle('extend-displays', async () => {
   if (process.platform !== 'win32') {
@@ -227,39 +223,8 @@ function autoExtend() {
   }
 }
 
-// Live preview: stream real screenshots of the presenter to the control window so
-// the operator sees EXACTLY what's on the prompter, perfectly in sync.
-let capturing = false;
-async function captureLoop() {
-  if (!capturing) return;
-  const start = Date.now();
-  if (
-    presenterWin && !presenterWin.isDestroyed() && presenterWin.isVisible() &&
-    controlWin && !controlWin.isDestroyed()
-  ) {
-    try {
-      const img = await presenterWin.webContents.capturePage();
-      const small = img.resize({ width: 480 });
-      // JPEG is far lighter than PNG to encode + transfer, so we can stream faster.
-      const url = 'data:image/jpeg;base64,' + small.toJPEG(70).toString('base64');
-      controlWin.webContents.send('preview-frame', url);
-    } catch {
-      /* ignore */
-    }
-  }
-  if (capturing) {
-    // self-pace to ~25fps; never let captures overlap or pile up
-    setTimeout(captureLoop, Math.max(0, 40 - (Date.now() - start)));
-  }
-}
-function startPreviewCapture() {
-  if (capturing) return;
-  capturing = true;
-  captureLoop();
-}
-function stopPreviewCapture() {
-  capturing = false;
-}
+// (Live preview is now a lightweight DOM clone driven by an offset number the
+//  presenter broadcasts — no screenshotting, so the prompter never stutters.)
 
 // --- app lifecycle ----------------------------------------------------------
 

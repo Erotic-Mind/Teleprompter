@@ -16,6 +16,7 @@ let maxOffset = 0;
 let last = null;
 let posThrottle = 0;
 let currentSeg = -1;
+let previewActive = false;
 
 const readingLinePx = () => window.innerHeight * 0.42;
 
@@ -92,6 +93,11 @@ function reportPos() {
   window.api.toControl({ type: 'pos', ratio, playing, atEnd: offset >= maxOffset });
 }
 
+// Tell the control window our viewport size so the preview clone can match layout.
+function reportDims() {
+  window.api.toControl({ type: 'dims', w: window.innerWidth, h: window.innerHeight });
+}
+
 function frame(t) {
   if (last == null) last = t;
   const dt = (t - last) / 1000;
@@ -110,11 +116,16 @@ function frame(t) {
     highlightCurrent(computeCurrent());
     reportPos();
   }
+  // Feed the live preview clone every frame (just a number — cheap, no capture).
+  if (previewActive) window.api.toControl({ type: 'offset', offset });
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-window.addEventListener('resize', recompute);
+window.addEventListener('resize', () => {
+  recompute();
+  reportDims();
+});
 
 // --- commands from the control window --------------------------------------
 
@@ -162,6 +173,10 @@ window.api.onFromControl((msg) => {
       clamp();
       applyTransform();
       reportPos();
+      break;
+    case 'previewActive':
+      previewActive = !!msg.value;
+      if (previewActive) reportDims();
       break;
   }
 });

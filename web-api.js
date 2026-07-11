@@ -48,8 +48,6 @@
     },
     extendDisplays: async () => ({ ok: false, out: 'web' }),
     onDisplaysChanged: () => {},
-    setPreviewActive: () => {},
-    onPreviewFrame: () => {},
     onPresenterStatus: (cb) => { statusCbs.push(cb); setTimeout(() => cb(status()), 0); },
     loadState: async () => { try { return JSON.parse(localStorage.getItem('prompter-state') || '{}'); } catch { return {}; } },
     saveState: (partial) => {

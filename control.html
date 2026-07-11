@@ -78,9 +78,15 @@
     border-radius: 12px; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
   }
-  #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
-  #preview-empty { position: absolute; color: var(--muted); font-size: 14px; text-align: center; padding: 0 12%; line-height: 1.6; }
   #preview-badge { position: absolute; left: 12px; top: 10px; font-size: 10.5px; letter-spacing: 2px; color: var(--muted); pointer-events: none; z-index: 2; }
+  #preview-empty { position: absolute; color: var(--muted); font-size: 14px; text-align: center; padding: 0 12%; line-height: 1.6; }
+  /* live clone of the prompter (scaled with CSS zoom to fit) */
+  #preview-viewport { position: relative; overflow: hidden; background: #000; flex: none; display: none; }
+  #preview-scroller { position: absolute; left: 0; right: 0; top: 0; will-change: transform; transform-origin: center center; }
+  #preview-script { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; font-weight: 600; line-height: 1.42; text-align: center; max-width: 94%; margin: 0 auto; padding: 0 3%; }
+  #preview-script .pv-seg { color: #7c7c82; margin: 0 0 0.55em; white-space: pre-wrap; word-break: break-word; }
+  #preview-script .pv-seg.current { color: #fff; }
+  #preview-readingline { position: absolute; left: 8%; right: 8%; height: 2px; background: var(--accent); opacity: 0.5; pointer-events: none; }
 
   footer { border-top: 1px solid var(--line); padding: 12px 18px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .transport { display: flex; gap: 8px; }
@@ -144,7 +150,14 @@
   <section id="preview-view">
     <div id="preview-stage">
       <div id="preview-badge">LIVE PROMPTER VIEW</div>
-      <img id="preview-img" alt="live prompter" />
+      <div id="preview-viewport">
+        <div id="preview-scroller">
+          <div id="pv-padtop"></div>
+          <div id="preview-script"></div>
+          <div id="pv-padbot"></div>
+        </div>
+        <div id="preview-readingline"></div>
+      </div>
       <div id="preview-empty">Open the prompter (click <b>Show Prompter</b>) to see its live screen here — exactly what the talent sees.</div>
     </div>
   </section>

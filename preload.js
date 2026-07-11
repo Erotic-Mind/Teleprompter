@@ -18,10 +18,6 @@ contextBridge.exposeInMainWorld('api', {
   onDisplaysChanged: (cb) => ipcRenderer.on('displays-changed', () => cb()),
   onPresenterStatus: (cb) => ipcRenderer.on('presenter-status', (_e, s) => cb(s)),
 
-  // live prompter preview (real screenshot stream)
-  setPreviewActive: (v) => ipcRenderer.send('preview-active', v),
-  onPreviewFrame: (cb) => ipcRenderer.on('preview-frame', (_e, url) => cb(url)),
-
   // persistence
   loadState: () => ipcRenderer.invoke('load-state'),
   saveState: (partial) => ipcRenderer.send('save-state', partial),

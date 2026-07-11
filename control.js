@@ -7,7 +7,13 @@ const els = {
   editView: $('edit-view'),
   performView: $('perform-view'),
   previewView: $('preview-view'),
-  previewImg: $('preview-img'),
+  previewStage: $('preview-stage'),
+  previewViewport: $('preview-viewport'),
+  previewScroller: $('preview-scroller'),
+  previewScript: $('preview-script'),
+  pvPadTop: $('pv-padtop'),
+  pvPadBot: $('pv-padbot'),
+  previewReadingLine: $('preview-readingline'),
   previewEmpty: $('preview-empty'),
   modeSwitch: $('mode-switch'),
   unitSwitch: $('unit-switch'),
@@ -42,7 +48,12 @@ const state = {
   segments: [],
   currentSeg: 0,
   presenterVisible: false,
+  mode: 'edit',
 };
+
+// live preview clone state
+let previewDims = null;
+let lastPreviewOffset = 0;
 
 const send = (msg) => window.api.toPresenter(msg);
 const save = () =>
@@ -54,6 +65,7 @@ function rebuildSegments() {
   state.segments = window.Segments.splitSegments(state.text, state.unit);
   if (state.currentSeg >= state.segments.length) state.currentSeg = Math.max(0, state.segments.length - 1);
   renderList();
+  buildPreviewClone();
   sendScript();
 }
 
@@ -142,11 +154,13 @@ els.wpm.addEventListener('input', () => {
 els.font.addEventListener('input', () => {
   state.font = Number(els.font.value);
   els.fontVal.textContent = state.font;
+  els.previewScript.style.fontSize = state.font + 'px';
   send({ type: 'font', value: state.font });
   save();
 });
 els.mirror.addEventListener('change', () => {
   state.mirror = els.mirror.checked;
+  updatePreviewMirror();
   send({ type: 'mirror', value: state.mirror });
   save();
 });
@@ -157,11 +171,13 @@ els.modeSwitch.addEventListener('click', (e) => {
   if (b) setMode(b.dataset.mode);
 });
 function setMode(mode) {
+  state.mode = mode;
   els.modeSwitch.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
   els.editView.classList.toggle('on', mode === 'edit');
   els.performView.classList.toggle('on', mode === 'perform');
   els.previewView.classList.toggle('on', mode === 'preview');
-  if (window.api.setPreviewActive) window.api.setPreviewActive(mode === 'preview');
+  send({ type: 'previewActive', value: mode === 'preview' });
+  if (mode === 'preview') requestAnimationFrame(computePreviewScale);
 }
 
 // unit switch (Paragraph / Line)
@@ -239,14 +255,58 @@ window.api.onPresenterStatus((s) => {
 });
 window.api.onDisplaysChanged(loadDisplays);
 
-// Live prompter preview — real screenshots streamed from the presenter.
-if (window.api.onPreviewFrame) {
-  window.api.onPreviewFrame((url) => {
-    els.previewImg.src = url;
-    els.previewImg.style.display = 'block';
-    els.previewEmpty.style.display = 'none';
+// --- live preview clone (mirrors the prompter's exact scroll, no screenshots) ---
+
+function buildPreviewClone() {
+  els.previewScript.style.fontSize = state.font + 'px';
+  els.previewScript.innerHTML = '';
+  state.segments.forEach((seg) => {
+    const d = document.createElement('div');
+    d.className = 'pv-seg';
+    d.dataset.i = seg.index;
+    d.textContent = seg.text;
+    els.previewScript.appendChild(d);
   });
+  setPreviewOffset(lastPreviewOffset);
 }
+
+function applyPreviewDims(w, h) {
+  previewDims = { w, h };
+  els.previewViewport.style.width = w + 'px';
+  els.previewViewport.style.height = h + 'px';
+  els.pvPadTop.style.height = h * 0.42 + 'px';
+  els.pvPadBot.style.height = h * 0.92 + 'px';
+  els.previewReadingLine.style.top = h * 0.42 + 'px';
+  els.previewViewport.style.display = 'block';
+  els.previewEmpty.style.display = 'none';
+  computePreviewScale();
+}
+
+function computePreviewScale() {
+  if (!previewDims) return;
+  const stage = els.previewStage.getBoundingClientRect();
+  const k = Math.max(0.05, Math.min((stage.width - 16) / previewDims.w, (stage.height - 16) / previewDims.h));
+  els.previewViewport.style.zoom = k;
+}
+
+function setPreviewOffset(offset) {
+  lastPreviewOffset = offset;
+  els.previewScroller.style.transform = `translateY(${-offset}px) scaleX(${state.mirror ? -1 : 1})`;
+}
+function updatePreviewMirror() {
+  setPreviewOffset(lastPreviewOffset);
+}
+
+function highlightPreviewSeg(idx) {
+  const cur = els.previewScript.querySelector('.pv-seg.current');
+  if (cur) cur.classList.remove('current');
+  const el = els.previewScript.querySelector(`.pv-seg[data-i="${idx}"]`);
+  if (el) el.classList.add('current');
+}
+
+window.addEventListener('resize', () => {
+  if (state.mode === 'preview') computePreviewScale();
+});
 
 // --- messages from the presenter -------------------------------------------
 
@@ -257,11 +317,19 @@ window.api.onFromPresenter((msg) => {
     send({ type: 'speed', value: state.wpm });
     send({ type: 'mirror', value: state.mirror });
     send({ type: 'seekSeg', index: state.currentSeg });
+    send({ type: 'previewActive', value: state.mode === 'preview' });
   } else if (msg.type === 'seg') {
-    if (msg.index >= 0 && msg.index !== state.currentSeg) {
-      state.currentSeg = msg.index;
-      highlightRow(msg.index);
+    if (msg.index >= 0) {
+      if (msg.index !== state.currentSeg) {
+        state.currentSeg = msg.index;
+        highlightRow(msg.index);
+      }
+      highlightPreviewSeg(msg.index);
     }
+  } else if (msg.type === 'dims') {
+    applyPreviewDims(msg.w, msg.h);
+  } else if (msg.type === 'offset') {
+    setPreviewOffset(msg.offset);
   } else if (msg.type === 'pos') {
     els.pct.textContent = Math.round(msg.ratio * 100) + '%';
     if (msg.atEnd && state.playing) setPlaying(false);
