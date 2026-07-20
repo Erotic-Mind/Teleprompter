@@ -3,11 +3,18 @@
 <style>
   :root { --ink: #ffffff; --dim: #6c6c72; --bg: #000000; --guide: #ff5a4d; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden; }
 
-  /* Native-scroll container (cueprompter method) — smooth on USB displays. */
-  #viewport { position: fixed; inset: 0; overflow: hidden; cursor: none; }
-  #content { transform-origin: center center; }
+  /* Scroll the DOCUMENT itself (cueprompter method) — the most optimized scroll
+     path, so a USB/DisplayLink display can do a cheap region-shift instead of
+     resending the whole frame. Hidden scrollbar; we scroll programmatically. */
+  html { background: var(--bg); overflow-y: scroll; scrollbar-width: none; }
+  html::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  body { background: var(--bg); cursor: none; }
+
+  /* NO transform by default — a transform would push the text onto a GPU layer
+     and defeat the native-scroll optimization. Only applied when mirrored. */
+  #content { }
+  #content.mirror { transform: scaleX(-1); transform-origin: center center; }
 
   #script {
     color: var(--ink);
@@ -17,7 +24,7 @@
   }
   .seg { margin: 0 0 0.5em; white-space: pre-wrap; word-break: break-word; }
   .w { transition: color .12s ease; }
-  .w.spoken { color: var(--dim); }     /* words already read (voice mode) */
+  .w.spoken { color: var(--dim); }
   .marker {
     text-align: center; color: var(--guide); font-size: 0.42em; font-weight: 700;
     letter-spacing: 3px; margin: 0.6em 0; opacity: 0.8;
@@ -38,12 +45,10 @@
   }
 </style>
 
-<div id="viewport">
-  <div id="content">
-    <div class="pad-top"></div>
-    <div id="script"></div>
-    <div class="pad-bottom"></div>
-  </div>
+<div id="content">
+  <div class="pad-top"></div>
+  <div id="script"></div>
+  <div class="pad-bottom"></div>
 </div>
 <div id="guide"><div class="tri left"></div><div class="line"></div><div class="tri right"></div></div>
 <div id="hint">Your script will appear here.<br />Control it from the laptop or your phone.</div>

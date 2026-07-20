@@ -31,7 +31,7 @@ async function presenterTests(win) {
   const send = (m) => win.webContents.send('from-control', m);
   const js = (c) => win.webContents.executeJavaScript(c);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const VP = "document.getElementById('viewport')";
+  const VP = "document.scrollingElement";
   const scrollTop = () => js(VP + '.scrollTop');
 
   log.push('PRESENTER (engine):');
@@ -77,9 +77,9 @@ async function presenterTests(win) {
   send({ type: 'readPos', value: 30 }); await wait(200);
   eq('reading position updates layout', await js("document.querySelector('.pad-top').style.height"), '30vh');
 
-  // mirror flip
+  // mirror flip (now a CSS class, so no transform sits on the text when off)
   send({ type: 'mirror', value: true }); await wait(120);
-  ok('mirror flips content', /scaleX\(-1\)/.test(await js("document.getElementById('content').style.transform")));
+  ok('mirror flips content (class only)', (await js("document.getElementById('content').classList.contains('mirror')")) === true);
 }
 
 app.whenReady().then(async () => {

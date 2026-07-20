@@ -1,17 +1,21 @@
-// Presenter — native-scroll teleprompter (cueprompter method: paced whole-pixel
-// native scroll, which a USB/DisplayLink display renders smoothly). Also supports
-// [PAUSE]/[TAKE] markers and per-word spans for voice word-following.
+// Presenter — cueprompter-exact scroll: paced whole-pixel DOCUMENT scroll
+// (window.scrollTo) with NO transform on the scrolling text. A CSS transform
+// promotes the text to a GPU layer, which defeats a USB/DisplayLink display's
+// cheap "shift the region" scroll and re-introduces the flooding/glitch. So the
+// mirror flip is applied as a CSS class only when it's actually ON (off by
+// default = zero transform = smooth on the prompter).
+// Also supports [PAUSE]/[TAKE] markers and per-word spans for voice-following.
 
-const viewport = document.getElementById('viewport');
 const content = document.getElementById('content');
 const script = document.getElementById('script');
 const hint = document.getElementById('hint');
+const doc = document.documentElement;
 
 let items = [];
 let segEls = [];
 let wordEls = [];
 let pauseEls = [];
-let offset = 0; // desired scrollTop (whole px)
+let offset = 0; // desired document scrollTop (whole px)
 let playing = false;
 let mirror = false;
 let wpm = 130;
@@ -24,12 +28,11 @@ let previewActive = false;
 let currentSeg = -1;
 let lastReport = 0;
 
-// voice word-following
 let voiceMode = false;
 let voiceTarget = null;
 let voiceRAF = null;
 
-let readPos = 45; // reading-line position, % from top (adjustable)
+let readPos = 45;
 const padTop = document.querySelector('.pad-top');
 const guideEl = document.getElementById('guide');
 const readingLineY = () => window.innerHeight * (readPos / 100);
@@ -43,7 +46,6 @@ const nowMs = () => (window.performance ? performance.now() : 0);
 
 function countWords(t) { t = (t || '').trim(); return t ? t.split(/\s+/).length : 0; }
 
-// Turn words-per-minute into a paced whole-pixel step (small step, even timing).
 function computePacing() {
   if (pxPerSec <= 0) { stepPx = 1; stepMs = 1000; return; }
   let px = 1, ms = 1000 / pxPerSec;
@@ -57,13 +59,13 @@ function recompute() {
   const n = countWords(script.textContent) || 1;
   pxPerSec = (scriptH / n) * (wpm / 60);
   computePacing();
-  maxOffset = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  maxOffset = Math.max(0, doc.scrollHeight - window.innerHeight);
   clamp();
   apply();
 }
 function clamp() { if (offset < 0) offset = 0; if (offset > maxOffset) offset = maxOffset; }
-function apply() { viewport.scrollTop = Math.round(offset); }         // native scroll
-function applyMirror() { content.style.transform = `scaleX(${mirror ? -1 : 1})`; }
+function apply() { window.scrollTo(0, Math.round(offset)); }               // native DOCUMENT scroll
+function applyMirror() { content.classList.toggle('mirror', mirror); }      // transform ONLY when mirrored
 
 function build(list) {
   items = list || [];
@@ -163,7 +165,7 @@ function setPlaying(on) {
   reportPos();
 }
 
-// --- voice word-following (Phase 5) ----------------------------------------
+// --- voice word-following --------------------------------------------------
 function voiceFollow() {
   if (!voiceMode || voiceTarget == null) { voiceRAF = null; return; }
   const diff = voiceTarget - offset;
