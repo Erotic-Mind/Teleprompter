@@ -3,9 +3,30 @@
 A calm, distraction-free teleprompter for the **Elgato Prompter** (or any external screen).
 Runs on **Windows and macOS**. No internet, no account — your scripts stay on your machine.
 
-It's a small **desktop app** (not a website). Your **laptop** is the operator desk — you
-write the script and drive everything from there — while the **prompter screen** shows the
-big scrolling text. Built for **retakes**: jump to any paragraph or line instantly.
+It comes **two ways**, so you can pick the one that fits.
+
+---
+
+## Two ways to run it
+
+### A. Simplest — one file, no install  (`b.html`)
+
+**Double-click `b.html`.** That's the whole app: a single self-contained page that opens in
+any browser and runs **completely offline** — no Node, no server, no account, nothing to
+install. It has true **words-per-minute** speed (30–400 wpm), a premium control bar that
+**fades away while you roll**, mirror / flip, text & background colours, a reading-line
+guide, and fullscreen (**F11**). Drag the window onto the prompter and press **Space** to
+play. Best for a single screen or **duplicate** mode.
+
+> Tip: right-click `b.html` → **Open with → Chrome** for the smoothest scroll, or make a
+> desktop shortcut to `chrome.exe --app="file:///…/b.html"` for a clean, tab-free app window.
+
+### B. Full desktop app — control on the laptop, text on the prompter
+
+The **Electron app** below turns your **laptop into the operator desk** — you write the
+script and drive everything from there — while the **prompter screen** shows the big
+scrolling text. Built for **retakes** (jump to any paragraph or line) and **Extend** mode.
+It needs Node.js; setup is below.
 
 ---
 
