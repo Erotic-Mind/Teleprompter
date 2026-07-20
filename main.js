@@ -127,12 +127,14 @@ function createPresenterWindow(display) {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    skipTaskbar: onExternal,
-    focusable: !onExternal ? true : false, // borderless prompter never grabs focus
+    skipTaskbar: false,
+    // A normal, focusable window stays put; a non-focusable/non-topmost borderless
+    // window can vanish. We never ACTIVATE it (always showInactive), so the control
+    // window keeps focus and keyboard shortcuts still work.
+    focusable: true,
     // NOT always-on-top: an overlay/topmost window bypasses normal desktop
-    // compositing (DWM), and a USB/DisplayLink display can only capture the
-    // normal composited desktop smoothly — which is exactly what a browser
-    // window (cueprompter, which IS smooth here) uses. So render as a normal window.
+    // compositing (DWM); a USB/DisplayLink display only captures the normal
+    // composited desktop smoothly — exactly what a browser window (cueprompter) uses.
     alwaysOnTop: false,
     backgroundColor: '#000000',
     title: 'Prompter',
@@ -304,13 +306,29 @@ ipcMain.handle('get-remote-info', () => ({ url: remoteServer ? `http://${lanIP()
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
-  // When the prompter becomes its own screen, put the presenter on it automatically.
-  screen.on('display-added', () => {
-    notifyDisplaysChanged();
-    if (guessPresenterDisplay()) openOrMovePresenter();
-  });
-  screen.on('display-removed', notifyDisplaysChanged);
-  screen.on('display-metrics-changed', notifyDisplaysChanged);
+  // Keep the presenter pinned to the current prompter screen. If that screen drops
+  // (DisplayLink can flap in/out), HIDE the window instead of stranding it at now-
+  // off-screen coordinates — that stranding is what looked like "it comes on for a
+  // second and goes away". Debounced so brief flaps don't cause churn.
+  let resyncTimer = null;
+  const resyncPresenter = () => {
+    clearTimeout(resyncTimer);
+    resyncTimer = setTimeout(() => {
+      if (presenterWin && !presenterWin.isDestroyed()) {
+        const target = guessPresenterDisplay();
+        if (target) {
+          presenterWin.setBounds(target.bounds);
+          if (!presenterWin.isVisible()) presenterWin.showInactive();
+        } else if (presenterWin.isVisible()) {
+          presenterWin.hide();
+        }
+      }
+      notifyDisplaysChanged();
+    }, 400);
+  };
+  screen.on('display-added', () => { if (guessPresenterDisplay()) openOrMovePresenter(); resyncPresenter(); });
+  screen.on('display-removed', resyncPresenter);
+  screen.on('display-metrics-changed', resyncPresenter);
 
   createControlWindow();
   startRemoteServer();
