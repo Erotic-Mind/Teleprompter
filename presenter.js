@@ -27,6 +27,8 @@ let timer = null;
 let previewActive = false;
 let currentSeg = -1;
 let lastReport = 0;
+let pauseOffsets = [];
+let monitorTimer = null;
 
 let voiceMode = false;
 let voiceTarget = null;
@@ -60,6 +62,7 @@ function recompute() {
   pxPerSec = (scriptH / n) * (wpm / 60);
   computePacing();
   maxOffset = Math.max(0, doc.scrollHeight - window.innerHeight);
+  pauseOffsets = pauseEls.map((m) => targetForEl(m)); // precompute so the hot loop reads no layout
   clamp();
   apply();
 }
@@ -138,29 +141,40 @@ function maybeReport() {
 }
 
 // --- paced native-scroll clock ---------------------------------------------
+// The scroll tick is deliberately BARE (like cueprompter): advance + scroll only.
+// No layout reads, no cross-process messages in here — that per-frame overhead is
+// what the USB/DisplayLink display can't absorb during motion (the laptop can).
+// Reporting/highlighting runs on a separate slow monitor instead.
 function tick() {
   if (!playing) return;
   const prev = offset;
   offset += stepPx;
-  for (const m of pauseEls) {
-    const t = targetForEl(m);
-    if (t > prev && t <= offset) {
-      offset = t; apply(); setPlaying(false); reportPos();
+  for (let i = 0; i < pauseOffsets.length; i++) {
+    const pt = pauseOffsets[i];
+    if (pt > prev && pt <= offset) {
+      offset = pt; window.scrollTo(0, Math.round(offset)); setPlaying(false);
       window.api.toControl({ type: 'marker', markerType: 'pause' });
       return;
     }
   }
-  if (offset >= maxOffset) { offset = maxOffset; apply(); setPlaying(false); reportPos(); return; }
-  apply();
-  maybeReport();
+  if (offset >= maxOffset) { offset = maxOffset; window.scrollTo(0, Math.round(offset)); setPlaying(false); return; }
+  window.scrollTo(0, Math.round(offset));
   timer = setTimeout(tick, stepMs);
+}
+function monitor() {
+  highlightCurrent();
+  reportPos();
+  if (previewActive) window.api.toControl({ type: 'offset', offset });
 }
 function setPlaying(on) {
   playing = !!on && !voiceMode;
   clearTimeout(timer);
+  clearInterval(monitorTimer);
+  monitorTimer = null;
   if (playing) {
     if (offset >= maxOffset) offset = 0;
     timer = setTimeout(tick, stepMs);
+    monitorTimer = setInterval(monitor, 150); // reporting decoupled from the scroll
   }
   reportPos();
 }
