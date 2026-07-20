@@ -14,12 +14,10 @@ const { execFile } = require('child_process');
 const http = require('http');
 const os = require('os');
 
-// USB / DisplayLink displays (the Elgato Prompter) stutter when content is
-// GPU-composited — the frame has to be read back off the GPU to stream over USB,
-// which is the classic DisplayLink judder. Software compositing keeps the frame in
-// CPU memory where the DisplayLink driver reads it efficiently → smooth scroll.
-// This is what a plain browser (cueprompter) effectively gets; Electron doesn't by default.
-app.disableHardwareAcceleration();
+// GPU acceleration is intentionally LEFT ON. Chrome (which scrolls smoothly on the
+// same DisplayLink prompter) runs GPU-on; the early working builds ran GPU-on. An
+// earlier build disabled it — that was a regression, so it's removed. GPU-on + a
+// normal composited window = the exact configuration Chrome uses.
 
 let controlWin = null;
 let presenterWin = null;
