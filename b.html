@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Teleprompter (B)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #000; color: #fff; font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+
+  /* Control bar — visible when paused, fades out while playing (mouse-move reveals it). */
+  #bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 16px; background: rgba(18,18,20,0.96); border-bottom: 1px solid #303036;
+    transition: opacity .45s ease;
+  }
+  body.playing #bar { opacity: 0; pointer-events: none; }
+  body.playing.show-bar #bar { opacity: 1; pointer-events: auto; }
+  #bar button { background: #222; color: #fff; border: 1px solid #444; border-radius: 7px; padding: 8px 12px; font-size: 17px; line-height: 1; cursor: pointer; }
+  #bar button:hover { background: #333; }
+  #bar .grp { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #b9b9c0; white-space: nowrap; }
+  #bar input[type=range] { width: 120px; accent-color: #ff5a4d; }
+  #bar input[type=color] { width: 34px; height: 28px; border: none; background: none; cursor: pointer; padding: 0; }
+
+  /* The script. Native document scroll (cueprompter method) = smooth on the USB prompter. */
+  #prompt {
+    outline: none;
+    font-size: 58px; line-height: 1.5; font-weight: 600;
+    padding: 55vh 5% 90vh 5%;
+    text-align: left;
+    white-space: pre-wrap; word-break: break-word;
+    transform-origin: center center;
+    caret-color: #ff5a4d;
+  }
+  body.center #prompt { text-align: center; }
+  body.fliph #prompt { transform: scaleX(-1); }
+  body.flipv #prompt { transform: scaleY(-1); }
+  body.fliph.flipv #prompt { transform: scale(-1, -1); }
+  #hint { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; color: #55555c; font-size: 12px; z-index: 90; }
+  body.playing #hint { display: none; }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <button id="play" title="Play / Pause (Space)">▶</button>
+    <button id="align" title="Align left / center">≡</button>
+    <button id="fliph" title="Mirror left-right (for the prompter glass)">⇋</button>
+    <button id="flipv" title="Flip upside-down">⇅</button>
+    <label class="grp">Background <input type="color" id="bg" value="#000000" /></label>
+    <label class="grp">Text <input type="color" id="fg" value="#ffffff" /></label>
+    <label class="grp">Text size: <span id="sizeval">58</span>px <input type="range" id="size" min="24" max="150" value="58" /></label>
+    <label class="grp">Margin: <span id="marginval">5</span>% <input type="range" id="margin" min="0" max="35" value="5" /></label>
+    <label class="grp">Speed: <span id="speedval">10</span> <input type="range" id="speed" min="1" max="50" value="10" /></label>
+    <button id="full" title="Fullscreen (F11 also works)">⛶</button>
+  </div>
+
+  <div id="prompt" contenteditable="true" spellcheck="false">Paste or type your script here.
+
+Press ▶ (or the spacebar) to start — the controls fade away while it scrolls, and come back when you pause or move the mouse.
+
+Drag this window onto the prompter and press F11 for fullscreen.</div>
+
+  <div id="hint">Paused — edit your script, adjust the controls, then press ▶ or Space to roll</div>
+
+<script>
+  const body = document.body;
+  const prompt = document.getElementById('prompt');
+  const playBtn = document.getElementById('play');
+  let playing = false, timer = null, speed = 10;
+
+  const delay = () => Math.max(3, 51 - speed);        // higher speed -> shorter delay
+  function step() {
+    if (!playing) return;
+    window.scrollBy(0, 1);                             // native 1px scroll — the smooth, USB-friendly method
+    if (Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight) { pause(); return; }
+    timer = setTimeout(step, delay());
+  }
+  function play() {
+    playing = true;
+    body.classList.add('playing');
+    body.classList.remove('show-bar');
+    prompt.setAttribute('contenteditable', 'false');
+    playBtn.textContent = '⏸';
+    clearTimeout(timer);
+    timer = setTimeout(step, delay());
+  }
+  function pause() {
+    playing = false;
+    body.classList.remove('playing', 'show-bar');
+    prompt.setAttribute('contenteditable', 'true');
+    playBtn.textContent = '▶';
+    clearTimeout(timer);
+  }
+  const toggle = () => (playing ? pause() : play());
+
+  playBtn.onclick = toggle;
+  document.getElementById('align').onclick = () => body.classList.toggle('center');
+  document.getElementById('fliph').onclick = () => body.classList.toggle('fliph');
+  document.getElementById('flipv').onclick = () => body.classList.toggle('flipv');
+  document.getElementById('bg').oninput = (e) => (body.style.background = e.target.value);
+  document.getElementById('fg').oninput = (e) => (prompt.style.color = e.target.value);
+  document.getElementById('size').oninput = (e) => { prompt.style.fontSize = e.target.value + 'px'; document.getElementById('sizeval').textContent = e.target.value; };
+  document.getElementById('margin').oninput = (e) => { prompt.style.paddingLeft = e.target.value + '%'; prompt.style.paddingRight = e.target.value + '%'; document.getElementById('marginval').textContent = e.target.value; };
+  document.getElementById('speed').oninput = (e) => { speed = +e.target.value; document.getElementById('speedval').textContent = speed; };
+  document.getElementById('full').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen().catch(() => {}); };
+
+  // reveal controls on mouse move while playing, then fade again
+  let hideT = null;
+  document.addEventListener('mousemove', () => {
+    if (!playing) return;
+    body.classList.add('show-bar');
+    clearTimeout(hideT);
+    hideT = setTimeout(() => body.classList.remove('show-bar'), 2500);
+  });
+
+  // keyboard: Space play/pause, arrows speed, Home to top (ignored while editing text)
+  document.addEventListener('keydown', (e) => {
+    const editing = document.activeElement === prompt && prompt.getAttribute('contenteditable') === 'true';
+    if (editing && e.key !== 'Escape') return;
+    if (e.key === ' ') { e.preventDefault(); toggle(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); const s = document.getElementById('speed'); s.value = Math.min(50, speed + 2); s.dispatchEvent(new Event('input')); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); const s = document.getElementById('speed'); s.value = Math.max(1, speed - 2); s.dispatchEvent(new Event('input')); }
+    else if (e.key === 'Home') { e.preventDefault(); window.scrollTo(0, 0); }
+    else if (e.key === 'Escape') { prompt.blur(); }
+  });
+</script>
+</body>
+</html>
