@@ -1,6 +1,6 @@
 {
   "name": "prompter",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A calm, distraction-free teleprompter for the Elgato Prompter (and any external screen). Windows + Mac.",
   "main": "main.js",
   "scripts": {
