@@ -131,7 +131,11 @@ function createPresenterWindow(display) {
     fullscreenable: false,
     skipTaskbar: onExternal,
     focusable: !onExternal ? true : false, // borderless prompter never grabs focus
-    alwaysOnTop: onExternal,
+    // NOT always-on-top: an overlay/topmost window bypasses normal desktop
+    // compositing (DWM), and a USB/DisplayLink display can only capture the
+    // normal composited desktop smoothly — which is exactly what a browser
+    // window (cueprompter, which IS smooth here) uses. So render as a normal window.
+    alwaysOnTop: false,
     backgroundColor: '#000000',
     title: 'Prompter',
     show: false,
@@ -141,7 +145,7 @@ function createPresenterWindow(display) {
     },
   });
   win.__external = onExternal;
-  if (onExternal) win.setAlwaysOnTop(true, 'screen-saver');
+  // (deliberately no setAlwaysOnTop — see note above; overlay windows stutter on DisplayLink)
   win.loadFile('presenter.html');
   win.once('ready-to-show', () => win.showInactive());
   win.on('closed', () => {
