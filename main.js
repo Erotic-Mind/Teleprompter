@@ -21,6 +21,7 @@ const os = require('os');
 
 let controlWin = null;
 let presenterWin = null;
+let presenterShouldShow = true; // the app wants the prompter shown whenever a prompter screen exists
 
 // --- persistence (remembers your script + settings) -------------------------
 
@@ -160,6 +161,7 @@ function createPresenterWindow(display) {
 // if the screen type changed (external <-> laptop) since window flags are fixed
 // at creation time.
 function openOrMovePresenter(preferId) {
+  presenterShouldShow = true;
   const displays = screen.getAllDisplays();
   const primaryId = screen.getPrimaryDisplay().id;
   let target = preferId != null ? displays.find((d) => d.id === preferId) : null;
@@ -180,6 +182,24 @@ function openOrMovePresenter(preferId) {
   sendStatus();
 }
 
+// Watchdog: keep making sure the prompter window is on the prompter screen and
+// visible whenever it should be. Never hides — so a flapping DisplayLink screen
+// can't make it "come on then vanish". A no-op when everything is already correct.
+function ensurePresenter() {
+  if (!presenterShouldShow) return;
+  const target = guessPresenterDisplay();
+  if (!target) return; // no separate prompter screen right now — leave things be
+  if (!presenterWin || presenterWin.isDestroyed() || !presenterWin.__external) {
+    if (presenterWin && !presenterWin.isDestroyed()) { const old = presenterWin; presenterWin = null; old.destroy(); }
+    createPresenterWindow(target);
+    return;
+  }
+  const b = presenterWin.getBounds();
+  const t = target.bounds;
+  if (b.x !== t.x || b.y !== t.y || b.width !== t.width || b.height !== t.height) presenterWin.setBounds(t);
+  if (!presenterWin.isVisible()) presenterWin.showInactive();
+}
+
 // --- IPC --------------------------------------------------------------------
 
 ipcMain.on('to-presenter', (_e, msg) => {
@@ -191,8 +211,9 @@ ipcMain.on('to-control', (_e, msg) => {
 
 ipcMain.handle('get-displays', () => listDisplays());
 
-ipcMain.on('show-presenter', (_e, displayId) => openOrMovePresenter(displayId));
+ipcMain.on('show-presenter', (_e, displayId) => { presenterShouldShow = true; openOrMovePresenter(displayId); });
 ipcMain.on('hide-presenter', () => {
+  presenterShouldShow = false;
   if (presenterWin && !presenterWin.isDestroyed()) presenterWin.hide();
   sendStatus();
 });
@@ -306,29 +327,14 @@ ipcMain.handle('get-remote-info', () => ({ url: remoteServer ? `http://${lanIP()
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
-  // Keep the presenter pinned to the current prompter screen. If that screen drops
-  // (DisplayLink can flap in/out), HIDE the window instead of stranding it at now-
-  // off-screen coordinates — that stranding is what looked like "it comes on for a
-  // second and goes away". Debounced so brief flaps don't cause churn.
+  // On any display change, re-assert the prompter window (debounced), and keep a
+  // steady watchdog running so a flapping DisplayLink screen always recovers.
   let resyncTimer = null;
-  const resyncPresenter = () => {
-    clearTimeout(resyncTimer);
-    resyncTimer = setTimeout(() => {
-      if (presenterWin && !presenterWin.isDestroyed()) {
-        const target = guessPresenterDisplay();
-        if (target) {
-          presenterWin.setBounds(target.bounds);
-          if (!presenterWin.isVisible()) presenterWin.showInactive();
-        } else if (presenterWin.isVisible()) {
-          presenterWin.hide();
-        }
-      }
-      notifyDisplaysChanged();
-    }, 400);
-  };
-  screen.on('display-added', () => { if (guessPresenterDisplay()) openOrMovePresenter(); resyncPresenter(); });
-  screen.on('display-removed', resyncPresenter);
-  screen.on('display-metrics-changed', resyncPresenter);
+  const resyncSoon = () => { clearTimeout(resyncTimer); resyncTimer = setTimeout(() => { ensurePresenter(); notifyDisplaysChanged(); }, 300); };
+  screen.on('display-added', resyncSoon);
+  screen.on('display-removed', resyncSoon);
+  screen.on('display-metrics-changed', resyncSoon);
+  setInterval(ensurePresenter, 2000);
 
   createControlWindow();
   startRemoteServer();
